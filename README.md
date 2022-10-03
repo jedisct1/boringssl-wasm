@@ -38,7 +38,7 @@ Build modes:
 * `-Drelease-small` (also turns `OPENSSL_SMALL` on to disable precomputed tables)
 * `-Ddebug` (default, not recommended in production builds)
 
-The resulting library is compatible with the vast majority of WebAssembly runtimes.
+The library is compatible with the vast majority of WebAssembly runtimes, and can be used linked with C, Zig, Rust, whatever.
 
 Optimizations only compatible with some runtimes can be also enabled:
 
