@@ -35,7 +35,7 @@ Build modes:
 
 * `-Drelease-fast`
 * `-Drelease-safe`
-* `-Drelease-small` (also turns `OPENSSL_SMALL` to disable precomputed tables)
+* `-Drelease-small` (also turns `OPENSSL_SMALL` on to disable precomputed tables)
 * `-Ddebug` (default, not recommended in production builds)
 
 The resulting library is compatible with the vast majority of WebAssembly runtimes.
