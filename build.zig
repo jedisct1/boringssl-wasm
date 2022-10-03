@@ -16,14 +16,14 @@ fn withBase(alloc: mem.Allocator, base: []const u8, name: []const u8) !ArrayList
 
 fn buildErrData(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
     const out_name = "err_data_generate.c";
-    var arena = heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
 
     var dir = try fs.cwd().makeOpenPath(base, .{});
     defer dir.close();
     var fd = try dir.createFile(out_name, .{});
     defer fd.close();
 
+    var arena = heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
     var child = std.ChildProcess.init(
         &.{ "go", "run", path_boringssl ++ "/crypto/err/err_data_generate.go" },
         arena.allocator(),
@@ -38,9 +38,6 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []con
 }
 
 fn addDir(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
-    var arena = heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
-
     var dir = try fs.cwd().openIterableDir(base, .{});
     defer dir.close();
     var it = dir.iterate();
@@ -48,15 +45,14 @@ fn addDir(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8)
         if (!mem.eql(u8, fs.path.extension(file.name), ".c")) {
             continue;
         }
+        var arena = heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
         const path = try withBase(arena.allocator(), base, file.name);
         lib.addCSourceFile(path.items, &.{});
     }
 }
 
 fn addSubdirs(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
-    var arena = heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
-
     var dir = try fs.cwd().openIterableDir(base, .{});
     defer dir.close();
     var it = dir.iterate();
@@ -64,8 +60,10 @@ fn addSubdirs(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const
         if (file.kind != .Directory) {
             continue;
         }
+        var arena = heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
         const path = try withBase(arena.allocator(), base, file.name);
-        try addDir(alloc, lib, path.items);
+        try addDir(arena.allocator(), lib, path.items);
     }
 }
 
