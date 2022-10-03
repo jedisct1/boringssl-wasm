@@ -33,7 +33,8 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []con
     try fd.writeFileAll(child.stdout.?, .{});
     _ = try child.wait();
 
-    const path = try withBase(arena.allocator(), base, out_name);
+    const path = try withBase(alloc, base, out_name);
+    defer path.deinit();
     lib.addCSourceFile(path.items, &.{});
 }
 
@@ -45,9 +46,8 @@ fn addDir(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8)
         if (!mem.eql(u8, fs.path.extension(file.name), ".c")) {
             continue;
         }
-        var arena = heap.ArenaAllocator.init(alloc);
-        defer arena.deinit();
-        const path = try withBase(arena.allocator(), base, file.name);
+        const path = try withBase(alloc, base, file.name);
+        defer path.deinit();
         lib.addCSourceFile(path.items, &.{});
     }
 }
@@ -60,10 +60,9 @@ fn addSubdirs(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const
         if (file.kind != .Directory) {
             continue;
         }
-        var arena = heap.ArenaAllocator.init(alloc);
-        defer arena.deinit();
-        const path = try withBase(arena.allocator(), base, file.name);
-        try addDir(arena.allocator(), lib, path.items);
+        const path = try withBase(alloc, base, file.name);
+        defer path.deinit();
+        try addDir(alloc, lib, path.items);
     }
 }
 
