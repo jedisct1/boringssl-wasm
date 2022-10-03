@@ -2,9 +2,13 @@
 
 A zig build file to compile BoringSSL's `libcrypto` to WebAssembly/WASI.
 
+## Precompiled library
+
+For convenience, a [precompiled library](precompiled/libcrypto.a) for WebAssembly can be directly downloaded from this repository.
+
 ## Dependencies
 
-The only required dependencies to build the library are:
+The only required dependencies to rebuild the library are:
 
 * [Go](https://www.golang.org) - Required by BoringSSL to generate the error codes map
 * [Zig](https://www.ziglang.org) - To compile C/C++ code to WebAssembly
