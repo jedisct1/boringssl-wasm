@@ -70,16 +70,14 @@ pub fn build(b: *std.build.Builder) !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    const mode = b.standardReleaseOptions();
-    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const target = b.standardTargetOptions(.{ .default_target = try std.zig.CrossTarget.parse(.{ .arch_os_abi = "wasm32-wasi" }) });
 
-    const lib = b.addStaticLibrary("crypto", null);
-    lib.setBuildMode(mode);
-    lib.setTarget(target);
+    const lib = b.addStaticLibrary(.{ .name = "crypto", .optimize = optimize, .target = target });
     lib.strip = true;
     lib.linkLibC();
     lib.install();
-    if (mode == .ReleaseSmall) {
+    if (optimize == .ReleaseSmall) {
         lib.defineCMacro("OPENSSL_SMALL", null);
     }
 

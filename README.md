@@ -26,17 +26,17 @@ git submodule update --init --recursive --depth=1
 Generic build for WebAssembly/WASI:
 
 ```sh
-zig build -Dtarget=wasm32-wasi -Drelease-fast
+zig build -Doptimize=ReleaseFast
 ```
 
 The resulting static library is put into `zig-out/libcrypto.a`.
 
 Build modes:
 
-* `-Drelease-fast`
-* `-Drelease-safe`
-* `-Drelease-small` (also turns `OPENSSL_SMALL` on to disable precomputed tables)
-* `-Ddebug` (default, not recommended in production builds)
+* `-Doptimize=ReleaseFast`
+* `-Doptimize=ReleaseSafe`
+* `-Doptimize-ReleaseSmall` (also turns `OPENSSL_SMALL` on to disable precomputed tables)
+* `-Doptimize=Debug` (default, not recommended in production builds)
 
 The library is compatible with the vast majority of WebAssembly runtimes, and can be used linked with C, Zig, Rust, whatever.
 
