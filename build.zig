@@ -107,8 +107,10 @@ pub fn build(b: *std.Build) !void {
 
     lib.addIncludePath(path_boringssl ++ fs.path.sep_str ++ "include");
     const base_crypto = path_boringssl ++ fs.path.sep_str ++ "crypto";
+    const base_decrepit = path_boringssl ++ fs.path.sep_str ++ "decrepit";
     const base_generated = "generated";
     try buildErrData(gpa.allocator(), lib, base_generated);
     try addDir(gpa.allocator(), lib, base_crypto);
+    try addDir(gpa.allocator(), lib, base_decrepit);
     try addSubdirs(gpa.allocator(), lib, base_crypto);
 }
