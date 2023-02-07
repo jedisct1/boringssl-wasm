@@ -14,7 +14,7 @@ fn withBase(alloc: mem.Allocator, base: []const u8, name: []const u8) !ArrayList
     return path;
 }
 
-fn buildErrData(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
+fn buildErrData(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
     const out_name = "err_data_generate.c";
 
     var dir = try fs.cwd().makeOpenPath(base, .{});
@@ -38,7 +38,7 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []con
     lib.addCSourceFile(path.items, &.{});
 }
 
-fn addDir(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
+fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
     var dir = try fs.cwd().openIterableDir(base, .{});
     defer dir.close();
     var it = dir.iterate();
@@ -52,7 +52,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8)
     }
 }
 
-fn addSubdirs(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const u8) !void {
+fn addSubdirs(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
     var dir = try fs.cwd().openIterableDir(base, .{});
     defer dir.close();
     var it = dir.iterate();
@@ -66,7 +66,7 @@ fn addSubdirs(alloc: mem.Allocator, lib: *std.build.LibExeObjStep, base: []const
     }
 }
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
