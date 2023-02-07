@@ -43,6 +43,19 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |file| {
+        if (file.kind == .Directory) {
+            if (mem.eql(u8, fs.path.extension(file.name), "test") or
+                mem.eql(u8, fs.path.extension(file.name), "asm"))
+            {
+                continue;
+            }
+            const path = try withBase(alloc, base, file.name);
+            defer path.deinit();
+            try addDir(alloc, lib, path.items);
+        }
+        if (file.kind != .File) {
+            continue;
+        }
         if (!mem.eql(u8, fs.path.extension(file.name), ".c")) {
             continue;
         }
