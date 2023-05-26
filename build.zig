@@ -86,7 +86,7 @@ pub fn build(b: *std.Build) !void {
     const lib = b.addStaticLibrary(.{ .name = "crypto", .optimize = optimize, .target = target });
     lib.strip = true;
     lib.linkLibC();
-    lib.install();
+    b.installArtifact(lib);
     if (optimize == .ReleaseSmall) {
         lib.defineCMacro("OPENSSL_SMALL", null);
     }
@@ -101,6 +101,9 @@ pub fn build(b: *std.Build) !void {
             lib.defineCMacro("SO_ERROR", "0");
             lib.defineCMacro("FREEBSD_GETRANDOM", null);
             lib.defineCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
+            lib.defineCMacro("socket(a,b,c)", "-1");
+            lib.defineCMacro("setsockopt(a,b,c,d,e)", "-1");
+            lib.defineCMacro("connect(a,b,c)", "-1");
             lib.defineCMacro("GRND_NONBLOCK", "0");
         }
     }
