@@ -43,7 +43,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |file| {
-        if (file.kind == .Directory) {
+        if (file.kind == .directory) {
             if (mem.eql(u8, fs.path.extension(file.name), "test") or
                 mem.eql(u8, fs.path.extension(file.name), "asm"))
             {
@@ -53,7 +53,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
             defer path.deinit();
             try addDir(alloc, lib, path.items);
         }
-        if (file.kind != .File or !mem.eql(u8, fs.path.extension(file.name), ".c")) {
+        if (file.kind != .file or !mem.eql(u8, fs.path.extension(file.name), ".c")) {
             continue;
         }
         const path = try withBase(alloc, base, file.name);
@@ -67,7 +67,7 @@ fn addSubdirs(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |file| {
-        if (file.kind != .Directory) {
+        if (file.kind != .directory) {
             continue;
         }
         const path = try withBase(alloc, base, file.name);
