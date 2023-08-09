@@ -35,7 +35,7 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const
 
     const path = try withBase(alloc, base, out_name);
     defer path.deinit();
-    lib.addCSourceFile(path.items, &.{});
+    lib.addCSourceFile(.{ .file = .{ .path = path.items }, .flags = &.{} });
 }
 
 fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
@@ -58,7 +58,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
         }
         const path = try withBase(alloc, base, file.name);
         defer path.deinit();
-        lib.addCSourceFile(path.items, &.{});
+        lib.addCSourceFile(.{ .file = .{ .path = path.items }, .flags = &.{} });
     }
 }
 
@@ -108,7 +108,7 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
-    lib.addIncludePath(path_boringssl ++ fs.path.sep_str ++ "include");
+    lib.addIncludePath(.{ .path = path_boringssl ++ fs.path.sep_str ++ "include" });
     const base_crypto = path_boringssl ++ fs.path.sep_str ++ "crypto";
     const base_decrepit = path_boringssl ++ fs.path.sep_str ++ "decrepit";
     const base_generated = "generated";
