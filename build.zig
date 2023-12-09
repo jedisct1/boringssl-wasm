@@ -39,7 +39,7 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const
 }
 
 fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
-    var dir = try fs.cwd().openIterableDir(base, .{});
+    var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |file| {
@@ -63,7 +63,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
 }
 
 fn addSubdirs(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
-    var dir = try fs.cwd().openIterableDir(base, .{});
+    var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |file| {
