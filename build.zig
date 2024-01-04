@@ -3,6 +3,7 @@ const fs = std.fs;
 const heap = std.heap;
 const mem = std.mem;
 const ArrayList = std.ArrayList;
+const Compile = std.Build.Step.Compile;
 
 const path_boringssl = "boringssl";
 
@@ -14,7 +15,7 @@ fn withBase(alloc: mem.Allocator, base: []const u8, name: []const u8) !ArrayList
     return path;
 }
 
-fn buildErrData(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
+fn buildErrData(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     const out_name = "err_data_generate.c";
 
     var dir = try fs.cwd().makeOpenPath(base, .{});
@@ -38,7 +39,7 @@ fn buildErrData(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const
     lib.addCSourceFile(.{ .file = .{ .path = path.items }, .flags = &.{} });
 }
 
-fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
+fn addDir(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
@@ -62,7 +63,7 @@ fn addDir(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !
     }
 }
 
-fn addSubdirs(alloc: mem.Allocator, lib: *std.Build.CompileStep, base: []const u8) !void {
+fn addSubdirs(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
@@ -83,8 +84,12 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{ .default_target = try std.zig.CrossTarget.parse(.{ .arch_os_abi = "wasm32-wasi" }) });
 
-    const lib = b.addStaticLibrary(.{ .name = "crypto", .optimize = optimize, .target = target });
-    lib.strip = true;
+    const lib = b.addStaticLibrary(.{
+        .name = "crypto",
+        .optimize = optimize,
+        .target = target,
+        .strip = true,
+    });
     lib.linkLibC();
     b.installArtifact(lib);
     if (optimize == .ReleaseSmall) {
@@ -94,18 +99,16 @@ pub fn build(b: *std.Build) !void {
     lib.defineCMacro("ARCH", "generic");
     lib.defineCMacro("OPENSSL_NO_ASM", null);
 
-    if (target.os_tag) |tag| {
-        if (tag == .wasi) {
-            lib.defineCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", null);
-            lib.defineCMacro("SO_KEEPALIVE", "0");
-            lib.defineCMacro("SO_ERROR", "0");
-            lib.defineCMacro("FREEBSD_GETRANDOM", null);
-            lib.defineCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
-            lib.defineCMacro("socket(a,b,c)", "-1");
-            lib.defineCMacro("setsockopt(a,b,c,d,e)", "-1");
-            lib.defineCMacro("connect(a,b,c)", "-1");
-            lib.defineCMacro("GRND_NONBLOCK", "0");
-        }
+    if (target.result.os.tag == .wasi) {
+        lib.defineCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", null);
+        lib.defineCMacro("SO_KEEPALIVE", "0");
+        lib.defineCMacro("SO_ERROR", "0");
+        lib.defineCMacro("FREEBSD_GETRANDOM", null);
+        lib.defineCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
+        lib.defineCMacro("socket(a,b,c)", "-1");
+        lib.defineCMacro("setsockopt(a,b,c,d,e)", "-1");
+        lib.defineCMacro("connect(a,b,c)", "-1");
+        lib.defineCMacro("GRND_NONBLOCK", "0");
     }
 
     lib.addIncludePath(.{ .path = path_boringssl ++ fs.path.sep_str ++ "include" });
