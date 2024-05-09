@@ -15,7 +15,7 @@ fn withBase(alloc: mem.Allocator, base: []const u8, name: []const u8) !ArrayList
     return path;
 }
 
-fn buildErrData(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
+fn buildErrData(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     const out_name = "err_data_generate.c";
 
     var dir = try fs.cwd().makeOpenPath(base, .{});
@@ -36,10 +36,10 @@ fn buildErrData(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
 
     const path = try withBase(alloc, base, out_name);
     defer path.deinit();
-    lib.addCSourceFile(.{ .file = .{ .path = path.items }, .flags = &.{} });
+    lib.addCSourceFile(.{ .file = b.path(path.items), .flags = &.{} });
 }
 
-fn addDir(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
+fn addDir(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
@@ -52,18 +52,18 @@ fn addDir(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
             }
             const path = try withBase(alloc, base, file.name);
             defer path.deinit();
-            try addDir(alloc, lib, path.items);
+            try addDir(b, alloc, lib, path.items);
         }
         if (file.kind != .file or !mem.eql(u8, fs.path.extension(file.name), ".c")) {
             continue;
         }
         const path = try withBase(alloc, base, file.name);
         defer path.deinit();
-        lib.addCSourceFile(.{ .file = .{ .path = path.items }, .flags = &.{} });
+        lib.addCSourceFile(.{ .file = b.path(path.items), .flags = &.{} });
     }
 }
 
-fn addSubdirs(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
+fn addSubdirs(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
     var dir = try fs.cwd().openDir(base, .{ .iterate = true });
     defer dir.close();
     var it = dir.iterate();
@@ -73,7 +73,7 @@ fn addSubdirs(alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
         }
         const path = try withBase(alloc, base, file.name);
         defer path.deinit();
-        try addDir(alloc, lib, path.items);
+        try addDir(b, alloc, lib, path.items);
     }
 }
 
@@ -111,12 +111,12 @@ pub fn build(b: *std.Build) !void {
         lib.defineCMacro("GRND_NONBLOCK", "0");
     }
 
-    lib.addIncludePath(.{ .path = path_boringssl ++ fs.path.sep_str ++ "include" });
+    lib.addIncludePath(b.path(path_boringssl ++ fs.path.sep_str ++ "include"));
     const base_crypto = path_boringssl ++ fs.path.sep_str ++ "crypto";
     const base_decrepit = path_boringssl ++ fs.path.sep_str ++ "decrepit";
     const base_generated = "generated";
-    try buildErrData(gpa.allocator(), lib, base_generated);
-    try addDir(gpa.allocator(), lib, base_crypto);
-    try addDir(gpa.allocator(), lib, base_decrepit);
-    try addSubdirs(gpa.allocator(), lib, base_crypto);
+    try buildErrData(b, gpa.allocator(), lib, base_generated);
+    try addDir(b, gpa.allocator(), lib, base_crypto);
+    try addDir(b, gpa.allocator(), lib, base_decrepit);
+    try addSubdirs(b, gpa.allocator(), lib, base_crypto);
 }
