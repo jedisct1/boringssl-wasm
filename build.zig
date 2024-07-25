@@ -25,14 +25,27 @@ fn buildErrData(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []cons
 
     var arena = heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
-    var child = std.ChildProcess.init(
-        &.{ "go", "run", path_boringssl ++ "/crypto/err/err_data_generate.go" },
-        arena.allocator(),
-    );
-    child.stdout_behavior = .Pipe;
-    try child.spawn();
-    try fd.writeFileAll(child.stdout.?, .{});
-    _ = try child.wait();
+    {
+        var child = std.process.Child.init(
+            &.{ "go", "build" },
+            arena.allocator(),
+        );
+        child.cwd = path_boringssl ++ "/util/pregenerate";
+        child.stdout_behavior = .Pipe;
+        try child.spawn();
+        _ = try child.wait();
+    }
+    {
+        var child = std.process.Child.init(
+            &.{"util/pregenerate/pregenerate"},
+            arena.allocator(),
+        );
+        child.cwd = path_boringssl;
+        child.stdout_behavior = .Pipe;
+        try child.spawn();
+        try fd.writeFileAll(child.stdout.?, .{});
+        _ = try child.wait();
+    }
 
     const path = try withBase(alloc, base, out_name);
     defer path.deinit();
@@ -82,7 +95,7 @@ pub fn build(b: *std.Build) !void {
     defer _ = gpa.deinit();
 
     const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{ .default_target = try std.zig.CrossTarget.parse(.{ .arch_os_abi = "wasm32-wasi" }) });
+    const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_arch = .wasm32, .os_tag = .wasi } });
 
     const lib = b.addStaticLibrary(.{
         .name = "crypto",
