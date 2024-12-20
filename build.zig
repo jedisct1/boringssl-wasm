@@ -106,22 +106,22 @@ pub fn build(b: *std.Build) !void {
     lib.linkLibC();
     b.installArtifact(lib);
     if (optimize == .ReleaseSmall) {
-        lib.defineCMacro("OPENSSL_SMALL", null);
+        lib.root_module.addCMacro("OPENSSL_SMALL", "");
     }
 
-    lib.defineCMacro("ARCH", "generic");
-    lib.defineCMacro("OPENSSL_NO_ASM", null);
+    lib.root_module.addCMacro("ARCH", "generic");
+    lib.root_module.addCMacro("OPENSSL_NO_ASM", "");
 
     if (target.result.os.tag == .wasi) {
-        lib.defineCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", null);
-        lib.defineCMacro("SO_KEEPALIVE", "0");
-        lib.defineCMacro("SO_ERROR", "0");
-        lib.defineCMacro("FREEBSD_GETRANDOM", null);
-        lib.defineCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
-        lib.defineCMacro("socket(a,b,c)", "-1");
-        lib.defineCMacro("setsockopt(a,b,c,d,e)", "-1");
-        lib.defineCMacro("connect(a,b,c)", "-1");
-        lib.defineCMacro("GRND_NONBLOCK", "0");
+        lib.root_module.addCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", "");
+        lib.root_module.addCMacro("SO_KEEPALIVE", "0");
+        lib.root_module.addCMacro("SO_ERROR", "0");
+        lib.root_module.addCMacro("FREEBSD_GETRANDOM", "");
+        lib.root_module.addCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
+        lib.root_module.addCMacro("socket(a,b,c)", "-1");
+        lib.root_module.addCMacro("setsockopt(a,b,c,d,e)", "-1");
+        lib.root_module.addCMacro("connect(a,b,c)", "-1");
+        lib.root_module.addCMacro("GRND_NONBLOCK", "0");
     }
 
     lib.addIncludePath(b.path(path_boringssl ++ fs.path.sep_str ++ "include"));
