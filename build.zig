@@ -4,58 +4,45 @@ const Dir = Io.Dir;
 const mem = std.mem;
 
 const path_boringssl = "boringssl";
+const cpp_flags: []const []const u8 = &.{"-std=c++17"};
 
 fn joinPath(alloc: mem.Allocator, base: []const u8, name: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, name });
 }
 
-fn buildErrData(b: *std.Build, mod: *std.Build.Module) void {
-    const go_build = b.addSystemCommand(&.{ "go", "build" });
-    go_build.setCwd(b.path(path_boringssl ++ "/util/pregenerate"));
-
-    const pregenerate = b.addSystemCommand(&.{"util/pregenerate/pregenerate"});
-    pregenerate.setCwd(b.path(path_boringssl));
-    pregenerate.step.dependOn(&go_build.step);
-    const generated_file = pregenerate.captureStdOut(.{ .basename = "err_data_generate.c" });
-
-    mod.addCSourceFile(.{ .file = generated_file, .flags = &.{} });
+fn isSkippedDir(name: []const u8) bool {
+    const skipped = [_][]const u8{ "test", "asm", "perlasm" };
+    for (skipped) |s| {
+        if (mem.eql(u8, name, s)) return true;
+    }
+    return false;
 }
 
-fn addDir(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, base: []const u8) !void {
+fn isTestFile(name: []const u8) bool {
+    const stem = std.fs.path.stem(name);
+    return mem.endsWith(u8, stem, "_test");
+}
+
+fn addDir(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, base: []const u8, recurse: bool) !void {
     var dir = Dir.cwd().openDir(io, base, .{ .iterate = true }) catch return;
     defer dir.close(io);
     var it = dir.iterate();
     while (try it.next(io)) |file| {
-        if (file.kind == .directory) {
-            if (mem.eql(u8, std.fs.path.extension(file.name), "test") or
-                mem.eql(u8, std.fs.path.extension(file.name), "asm"))
-            {
-                continue;
-            }
+        if (file.kind == .directory and recurse) {
+            if (isSkippedDir(file.name)) continue;
+            // Skip fipsmodule subdirectories — they contain .cc.inc files
+            // included by bcm.cc as a unity build
+            if (mem.eql(u8, file.name, "fipsmodule")) continue;
             const sub = try joinPath(alloc, base, file.name);
             defer alloc.free(sub);
-            try addDir(b, alloc, io, mod, sub);
+            try addDir(b, alloc, io, mod, sub, true);
         }
-        if (file.kind != .file or !mem.eql(u8, std.fs.path.extension(file.name), ".c")) {
-            continue;
-        }
+        if (file.kind != .file) continue;
+        if (!mem.eql(u8, std.fs.path.extension(file.name), ".cc")) continue;
+        if (isTestFile(file.name)) continue;
         const path = try joinPath(alloc, base, file.name);
         defer alloc.free(path);
-        mod.addCSourceFile(.{ .file = b.path(path), .flags = &.{} });
-    }
-}
-
-fn addSubdirs(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, base: []const u8) !void {
-    var dir = Dir.cwd().openDir(io, base, .{ .iterate = true }) catch return;
-    defer dir.close(io);
-    var it = dir.iterate();
-    while (try it.next(io)) |file| {
-        if (file.kind != .directory) {
-            continue;
-        }
-        const path = try joinPath(alloc, base, file.name);
-        defer alloc.free(path);
-        try addDir(b, alloc, io, mod, path);
+        mod.addCSourceFile(.{ .file = b.path(path), .flags = cpp_flags });
     }
 }
 
@@ -71,6 +58,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .link_libcpp = true,
         .strip = true,
     });
 
@@ -101,10 +89,19 @@ pub fn build(b: *std.Build) !void {
     }
 
     mod.addIncludePath(b.path(path_boringssl ++ "/include"));
+
     const base_crypto = path_boringssl ++ "/crypto";
     const base_decrepit = path_boringssl ++ "/decrepit";
-    buildErrData(b, mod);
-    try addDir(b, gpa.allocator(), io, mod, base_crypto);
-    try addDir(b, gpa.allocator(), io, mod, base_decrepit);
-    try addSubdirs(b, gpa.allocator(), io, mod, base_crypto);
+
+    // Add all crypto and decrepit sources (recursive)
+    try addDir(b, gpa.allocator(), io, mod, base_crypto, true);
+    try addDir(b, gpa.allocator(), io, mod, base_decrepit, true);
+
+    // Add fipsmodule top-level sources explicitly (bcm.cc is a unity build
+    // that includes .cc.inc files from subdirectories)
+    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/bcm.cc"), .flags = cpp_flags });
+    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/fips_shared_support.cc"), .flags = cpp_flags });
+
+    // Pre-generated error data
+    mod.addCSourceFile(.{ .file = b.path(path_boringssl ++ "/gen/crypto/err_data.cc"), .flags = cpp_flags });
 }
