@@ -1,135 +1,110 @@
 const std = @import("std");
-const fs = std.fs;
-const heap = std.heap;
+const Io = std.Io;
+const Dir = Io.Dir;
 const mem = std.mem;
-const ArrayList = std.ArrayList;
-const Compile = std.Build.Step.Compile;
 
 const path_boringssl = "boringssl";
 
-fn withBase(alloc: mem.Allocator, base: []const u8, name: []const u8) !ArrayList(u8) {
-    var path = ArrayList(u8).init(alloc);
-    try path.appendSlice(base);
-    try path.append(fs.path.sep);
-    try path.appendSlice(name);
-    return path;
+fn joinPath(alloc: mem.Allocator, base: []const u8, name: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, name });
 }
 
-fn buildErrData(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
-    const out_name = "err_data_generate.c";
+fn buildErrData(b: *std.Build, mod: *std.Build.Module) void {
+    const go_build = b.addSystemCommand(&.{ "go", "build" });
+    go_build.setCwd(b.path(path_boringssl ++ "/util/pregenerate"));
 
-    var dir = try fs.cwd().makeOpenPath(base, .{});
-    defer dir.close();
-    var fd = try dir.createFile(out_name, .{});
-    defer fd.close();
+    const pregenerate = b.addSystemCommand(&.{"util/pregenerate/pregenerate"});
+    pregenerate.setCwd(b.path(path_boringssl));
+    pregenerate.step.dependOn(&go_build.step);
+    const generated_file = pregenerate.captureStdOut(.{ .basename = "err_data_generate.c" });
 
-    var arena = heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    {
-        var child = std.process.Child.init(
-            &.{ "go", "build" },
-            arena.allocator(),
-        );
-        child.cwd = path_boringssl ++ "/util/pregenerate";
-        child.stdout_behavior = .Pipe;
-        try child.spawn();
-        _ = try child.wait();
-    }
-    {
-        var child = std.process.Child.init(
-            &.{"util/pregenerate/pregenerate"},
-            arena.allocator(),
-        );
-        child.cwd = path_boringssl;
-        child.stdout_behavior = .Pipe;
-        try child.spawn();
-        try fd.writeFileAll(child.stdout.?, .{});
-        _ = try child.wait();
-    }
-
-    const path = try withBase(alloc, base, out_name);
-    defer path.deinit();
-    lib.addCSourceFile(.{ .file = b.path(path.items), .flags = &.{} });
+    mod.addCSourceFile(.{ .file = generated_file, .flags = &.{} });
 }
 
-fn addDir(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
-    var dir = try fs.cwd().openDir(base, .{ .iterate = true });
-    defer dir.close();
+fn addDir(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, base: []const u8) !void {
+    var dir = Dir.cwd().openDir(io, base, .{ .iterate = true }) catch return;
+    defer dir.close(io);
     var it = dir.iterate();
-    while (try it.next()) |file| {
+    while (try it.next(io)) |file| {
         if (file.kind == .directory) {
-            if (mem.eql(u8, fs.path.extension(file.name), "test") or
-                mem.eql(u8, fs.path.extension(file.name), "asm"))
+            if (mem.eql(u8, std.fs.path.extension(file.name), "test") or
+                mem.eql(u8, std.fs.path.extension(file.name), "asm"))
             {
                 continue;
             }
-            const path = try withBase(alloc, base, file.name);
-            defer path.deinit();
-            try addDir(b, alloc, lib, path.items);
+            const sub = try joinPath(alloc, base, file.name);
+            defer alloc.free(sub);
+            try addDir(b, alloc, io, mod, sub);
         }
-        if (file.kind != .file or !mem.eql(u8, fs.path.extension(file.name), ".c")) {
+        if (file.kind != .file or !mem.eql(u8, std.fs.path.extension(file.name), ".c")) {
             continue;
         }
-        const path = try withBase(alloc, base, file.name);
-        defer path.deinit();
-        lib.addCSourceFile(.{ .file = b.path(path.items), .flags = &.{} });
+        const path = try joinPath(alloc, base, file.name);
+        defer alloc.free(path);
+        mod.addCSourceFile(.{ .file = b.path(path), .flags = &.{} });
     }
 }
 
-fn addSubdirs(b: *std.Build, alloc: mem.Allocator, lib: *Compile, base: []const u8) !void {
-    var dir = try fs.cwd().openDir(base, .{ .iterate = true });
-    defer dir.close();
+fn addSubdirs(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, base: []const u8) !void {
+    var dir = Dir.cwd().openDir(io, base, .{ .iterate = true }) catch return;
+    defer dir.close(io);
     var it = dir.iterate();
-    while (try it.next()) |file| {
+    while (try it.next(io)) |file| {
         if (file.kind != .directory) {
             continue;
         }
-        const path = try withBase(alloc, base, file.name);
-        defer path.deinit();
-        try addDir(b, alloc, lib, path.items);
+        const path = try joinPath(alloc, base, file.name);
+        defer alloc.free(path);
+        try addDir(b, alloc, io, mod, path);
     }
 }
 
 pub fn build(b: *std.Build) !void {
-    var gpa = heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+    const io = b.graph.io;
 
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_arch = .wasm32, .os_tag = .wasi } });
 
-    const lib = b.addStaticLibrary(.{
-        .name = "crypto",
-        .optimize = optimize,
+    const mod = b.createModule(.{
         .target = target,
+        .optimize = optimize,
+        .link_libc = true,
         .strip = true,
     });
-    lib.linkLibC();
+
+    const lib = b.addLibrary(.{
+        .name = "crypto",
+        .root_module = mod,
+        .linkage = .static,
+    });
     b.installArtifact(lib);
+
     if (optimize == .ReleaseSmall) {
-        lib.root_module.addCMacro("OPENSSL_SMALL", "");
+        mod.addCMacro("OPENSSL_SMALL", "");
     }
 
-    lib.root_module.addCMacro("ARCH", "generic");
-    lib.root_module.addCMacro("OPENSSL_NO_ASM", "");
+    mod.addCMacro("ARCH", "generic");
+    mod.addCMacro("OPENSSL_NO_ASM", "");
 
     if (target.result.os.tag == .wasi) {
-        lib.root_module.addCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", "");
-        lib.root_module.addCMacro("SO_KEEPALIVE", "0");
-        lib.root_module.addCMacro("SO_ERROR", "0");
-        lib.root_module.addCMacro("FREEBSD_GETRANDOM", "");
-        lib.root_module.addCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
-        lib.root_module.addCMacro("socket(a,b,c)", "-1");
-        lib.root_module.addCMacro("setsockopt(a,b,c,d,e)", "-1");
-        lib.root_module.addCMacro("connect(a,b,c)", "-1");
-        lib.root_module.addCMacro("GRND_NONBLOCK", "0");
+        mod.addCMacro("OPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED", "");
+        mod.addCMacro("SO_KEEPALIVE", "0");
+        mod.addCMacro("SO_ERROR", "0");
+        mod.addCMacro("FREEBSD_GETRANDOM", "");
+        mod.addCMacro("getrandom(a,b,c)", "getentropy(a,b)|b");
+        mod.addCMacro("socket(a,b,c)", "-1");
+        mod.addCMacro("setsockopt(a,b,c,d,e)", "-1");
+        mod.addCMacro("connect(a,b,c)", "-1");
+        mod.addCMacro("GRND_NONBLOCK", "0");
     }
 
-    lib.addIncludePath(b.path(path_boringssl ++ fs.path.sep_str ++ "include"));
-    const base_crypto = path_boringssl ++ fs.path.sep_str ++ "crypto";
-    const base_decrepit = path_boringssl ++ fs.path.sep_str ++ "decrepit";
-    const base_generated = "generated";
-    try buildErrData(b, gpa.allocator(), lib, base_generated);
-    try addDir(b, gpa.allocator(), lib, base_crypto);
-    try addDir(b, gpa.allocator(), lib, base_decrepit);
-    try addSubdirs(b, gpa.allocator(), lib, base_crypto);
+    mod.addIncludePath(b.path(path_boringssl ++ "/include"));
+    const base_crypto = path_boringssl ++ "/crypto";
+    const base_decrepit = path_boringssl ++ "/decrepit";
+    buildErrData(b, mod);
+    try addDir(b, gpa.allocator(), io, mod, base_crypto);
+    try addDir(b, gpa.allocator(), io, mod, base_decrepit);
+    try addSubdirs(b, gpa.allocator(), io, mod, base_crypto);
 }
