@@ -38,16 +38,18 @@ fn addDir(b: *std.Build, alloc: mem.Allocator, io: Io, mod: *std.Build.Module, b
             try addDir(b, alloc, io, mod, sub, true);
         }
         if (file.kind != .file) continue;
-        if (!mem.eql(u8, std.fs.path.extension(file.name), ".cc")) continue;
+        const ext = std.fs.path.extension(file.name);
+        if (!mem.eql(u8, ext, ".c") and !mem.eql(u8, ext, ".cc")) continue;
         if (isTestFile(file.name)) continue;
         const path = try joinPath(alloc, base, file.name);
         defer alloc.free(path);
-        mod.addCSourceFile(.{ .file = b.path(path), .flags = cpp_flags });
+        const flags: []const []const u8 = if (mem.eql(u8, ext, ".cc")) cpp_flags else &.{};
+        mod.addCSourceFile(.{ .file = b.path(path), .flags = flags });
     }
 }
 
 pub fn build(b: *std.Build) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     const io = b.graph.io;
 
@@ -97,11 +99,8 @@ pub fn build(b: *std.Build) !void {
     try addDir(b, gpa.allocator(), io, mod, base_crypto, true);
     try addDir(b, gpa.allocator(), io, mod, base_decrepit, true);
 
-    // Add fipsmodule top-level sources explicitly (bcm.cc is a unity build
-    // that includes .cc.inc files from subdirectories)
-    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/bcm.cc"), .flags = cpp_flags });
-    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/fips_shared_support.cc"), .flags = cpp_flags });
+    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/bcm.c"), .flags = &.{} });
+    mod.addCSourceFile(.{ .file = b.path(base_crypto ++ "/fipsmodule/fips_shared_support.c"), .flags = &.{} });
 
-    // Pre-generated error data
-    mod.addCSourceFile(.{ .file = b.path(path_boringssl ++ "/gen/crypto/err_data.cc"), .flags = cpp_flags });
+    mod.addCSourceFile(.{ .file = b.path(path_boringssl ++ "/gen/crypto/err_data.c"), .flags = &.{} });
 }
