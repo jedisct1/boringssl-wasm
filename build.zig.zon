@@ -1,0 +1,13 @@
+.{
+    .name = .boringssl_wasm,
+    .version = "0.0.0",
+    .fingerprint = 0x3389974c76b5d9a8,
+    .dependencies = .{
+        .minilibc = .{
+            .url = "git+https://github.com/jedisct1/wasm-minilibc#175e9c1db82acb5307cacddbbc936fb11e77769f",
+            .hash = "wasm_minilibc-0.1.0-8uIw-FVUAACzntWaPaLb0kZ1pURgcf5TP8-s5Ydu2vAP",
+            .lazy = true,
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "boringssl", "include", "LICENSE" },
+}
